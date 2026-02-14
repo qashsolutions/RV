@@ -50,7 +50,7 @@ export function ScenarioPanel({ events, onChange, sentimentScore, sentimentConfi
           <p className="text-xs text-slate-400 mt-0.5">Toggle events to see how they impact the predicted resale value</p>
         </div>
         {enabledCount > 0 && (
-          <span className="tag tag-yellow">{enabledCount} active</span>
+          <span className="tag tag-yellow whitespace-nowrap text-[10px] px-2.5 py-0.5">{enabledCount} active</span>
         )}
       </div>
 
