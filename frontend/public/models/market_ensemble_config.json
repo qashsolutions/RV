@@ -1,0 +1,50 @@
+{
+  "prefix": "market",
+  "weights": {
+    "xgboost": 0.3335948435982979,
+    "lightgbm": 0.333243057518589,
+    "mdt": 0.33316209888311316
+  },
+  "feature_columns": [
+    "age_years",
+    "age_squared",
+    "lease_duration_months",
+    "brand_tier_encoded",
+    "brand_retention",
+    "model_line_encoded",
+    "model_tier",
+    "processor_gen",
+    "processor_tier",
+    "is_xeon",
+    "ram_gb",
+    "ram_log",
+    "storage_gb",
+    "storage_log",
+    "has_ssd",
+    "screen_inches",
+    "screen_bucket",
+    "price_log",
+    "price_tier",
+    "spec_score"
+  ],
+  "model_scores": {
+    "xgboost": {
+      "r2": 0.712433807214566,
+      "mae": 0.024151376757955235
+    },
+    "lightgbm": {
+      "r2": 0.711682523731318,
+      "mae": 0.024357885782780676
+    },
+    "mdt": {
+      "r2": 0.7115096263679271,
+      "mae": 0.024220844508344906
+    }
+  },
+  "ensemble_metrics": {
+    "r2": 0.7120778254598299,
+    "mae": 0.024227818123229196,
+    "rmse": 0.04522052402738476,
+    "avg_std": 0.0003628180970258914
+  }
+}

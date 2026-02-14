@@ -1,0 +1,67 @@
+{
+  "brand_tier_map": {
+    "Apple": "Premium",
+    "Microsoft": "Premium",
+    "Lenovo": "Business",
+    "Dell": "Business",
+    "HP": "Business",
+    "Fujitsu": "Business",
+    "Panasonic": "Business",
+    "ASUS": "Mid",
+    "Acer": "Mid",
+    "MSI": "Mid",
+    "Samsung": "Mid",
+    "LG": "Mid",
+    "Toshiba": "Mid",
+    "Dynabook": "Mid",
+    "Huawei": "Economy",
+    "Xiaomi": "Economy",
+    "Honor": "Economy"
+  },
+  "brand_tier_encoding": {
+    "Premium": 4,
+    "Business": 3,
+    "Mid": 2,
+    "Economy": 1,
+    "Unknown": 2
+  },
+  "brand_retention": {
+    "Apple": 1.15,
+    "Microsoft": 1.05,
+    "Lenovo": 1.0,
+    "Dell": 0.98,
+    "HP": 0.97,
+    "Fujitsu": 0.95,
+    "Panasonic": 0.96,
+    "ASUS": 0.92,
+    "Acer": 0.88,
+    "MSI": 0.9,
+    "Samsung": 0.91,
+    "LG": 0.89,
+    "Huawei": 0.8,
+    "Xiaomi": 0.78
+  },
+  "model_line_map": {
+    "latitude": "business_standard",
+    "precision": "workstation",
+    "inspiron": "consumer",
+    "xps": "premium",
+    "vostro": "sme",
+    "optiplex": "desktop",
+    "thinkpad": "business_standard",
+    "elitebook": "business_standard",
+    "probook": "sme",
+    "zbook": "workstation",
+    "macbook": "premium",
+    "surface": "premium"
+  },
+  "model_line_encoding": {
+    "workstation": 5,
+    "premium": 4,
+    "business_standard": 3,
+    "sme": 2,
+    "consumer": 1,
+    "desktop": 1,
+    "unknown": 2
+  }
+}
