@@ -31,6 +31,9 @@ from features import (
     engineer_features, get_feature_columns, get_target_column,
     get_fallback_target, save_metadata, load_data
 )
+from fred_data import (
+    fetch_all_series, merge_fred_features, get_fred_defaults, get_fred_feature_columns
+)
 
 warnings.filterwarnings('ignore')
 
@@ -202,6 +205,8 @@ def main():
     parser.add_argument('--output', default='./trained_models')
     parser.add_argument('--export-frontend', default='../frontend/public/models')
     parser.add_argument('--test-size', type=float, default=0.2)
+    parser.add_argument('--fred-api-key', default=os.environ.get('FRED_API_KEY', ''),
+                        help='FRED API key (or set FRED_API_KEY env var)')
     args = parser.parse_args()
 
     df = load_all_data(args.data)
@@ -209,6 +214,27 @@ def main():
 
     # Feature engineering
     df_feat, metadata = engineer_features(df, is_training=True)
+
+    # Merge FRED macro-economic indicators
+    fred_df = None
+    if args.fred_api_key:
+        print("\n--- FRED Economic Data Integration ---")
+        try:
+            fred_df = fetch_all_series(args.fred_api_key)
+            df_feat = merge_fred_features(df_feat, fred_df)
+        except Exception as e:
+            print(f"Warning: FRED fetch failed ({e}), using defaults")
+            from fred_data import _apply_defaults
+            df_feat = _apply_defaults(df_feat)
+    else:
+        print("\nNo FRED API key provided (--fred-api-key or FRED_API_KEY env var)")
+        print("Using default macro-economic values for all rows")
+        from fred_data import _apply_defaults
+        df_feat = _apply_defaults(df_feat)
+
+    # Save FRED defaults to metadata for frontend inference
+    metadata['fred_defaults'] = get_fred_defaults()
+    metadata['fred_feature_columns'] = get_fred_feature_columns()
 
     feature_cols = get_feature_columns()
     available = [c for c in feature_cols if c in df_feat.columns]
@@ -500,6 +526,9 @@ def generate_precomputed(df, feature_cols, market_models, market_weights,
         BRAND_TIER_ENCODING, BRAND_RETENTION, MODEL_LINE_ENCODING
     )
 
+    # Get FRED defaults for precomputed predictions
+    fred_defs = get_fred_defaults()
+
     predictions = []
     for cfg in configs:
         label, ml, mt, pt, pg, ix, ram, stor, scr = cfg
@@ -523,7 +552,10 @@ def generate_precomputed(df, feature_cols, market_models, market_weights,
                 features = np.array([[
                     age, age**2, term, bt, br, mle, mt, pg, pt,
                     1 if ix else 0, ram, rl, stor, sl, 1 if stor > 0 else 0,
-                    scr, sb, pl, ptier, ss
+                    scr, sb, pl, ptier, ss,
+                    fred_defs['cpi_index'], fred_defs['cpi_yoy_change'],
+                    fred_defs['consumer_sentiment'], fred_defs['fed_funds_rate'],
+                    fred_defs['macro_score'],
                 ]])
 
                 # Market predictions with range

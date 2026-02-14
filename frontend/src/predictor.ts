@@ -72,6 +72,18 @@ let marketTree: TreeData | null = null
 let rvTree: TreeData | null = null
 let manifestData: any = null
 
+// FRED macro-economic defaults (approximate 2024 values, updated at retrain time)
+// These are used for browser-side inference since we can't call FRED API client-side.
+// When models are retrained with --fred-api-key, feature_metadata.json will contain
+// the latest values; we fall back to these if metadata isn't available.
+const FRED_DEFAULTS = {
+  cpiIndex: 121.7054,        // CPI normalized to 100-scale (base: 2020 CPI ~258)
+  cpiYoyChange: 0.031,       // ~3.1% year-over-year inflation
+  consumerSentiment: 67.0,   // U. Michigan consumer sentiment index
+  fedFundsRate: 5.33,        // Effective federal funds rate
+  macroScore: 0.5816,        // Composite: sentiment(40%) + low-inflation(30%) + low-rate(30%)
+}
+
 export async function loadModels(basePath: string): Promise<void> {
   const [mt, rt, mf] = await Promise.all([
     fetch(`${basePath}/market_mdt.json`).then(r => r.json()),
@@ -109,7 +121,15 @@ function buildFeatureVector(input: LaptopInput): number[] {
   const priceTier = input.purchasePrice < 1000 ? 1 : input.purchasePrice < 1500 ? 2 : input.purchasePrice < 2000 ? 3 : input.purchasePrice < 3000 ? 4 : 5
   const specScore = (input.ramGb / 64.0 + input.storageGb / 2000.0 + input.processorGen / 13.0 + input.processorTier / 5.0) / 4
 
-  // Must match get_feature_columns() order in features.py
+  // Load FRED defaults from manifest metadata if available, else use built-in defaults
+  const fredMeta = manifestData?.fred_defaults
+  const cpiIndex = fredMeta?.cpi_index ?? FRED_DEFAULTS.cpiIndex
+  const cpiYoyChange = fredMeta?.cpi_yoy_change ?? FRED_DEFAULTS.cpiYoyChange
+  const consumerSentiment = fredMeta?.consumer_sentiment ?? FRED_DEFAULTS.consumerSentiment
+  const fedFundsRate = fredMeta?.fed_funds_rate ?? FRED_DEFAULTS.fedFundsRate
+  const macroScore = fredMeta?.macro_score ?? FRED_DEFAULTS.macroScore
+
+  // Must match get_feature_columns() order in features.py (20 hardware + 5 macro)
   return [
     age,                        // age_years
     age * age,                  // age_squared
@@ -131,6 +151,11 @@ function buildFeatureVector(input: LaptopInput): number[] {
     priceLog,                   // price_log
     priceTier,                  // price_tier
     specScore,                  // spec_score
+    cpiIndex,                   // cpi_index (FRED)
+    cpiYoyChange,               // cpi_yoy_change (FRED)
+    consumerSentiment,          // consumer_sentiment (FRED)
+    fedFundsRate,               // fed_funds_rate (FRED)
+    macroScore,                 // macro_score (FRED)
   ]
 }
 
