@@ -81,7 +81,7 @@ const FRED_DEFAULTS = {
   cpiYoyChange: 0.031,       // ~3.1% year-over-year inflation
   consumerSentiment: 67.0,   // U. Michigan consumer sentiment index
   fedFundsRate: 5.33,        // Effective federal funds rate
-  macroScore: 0.5816,        // Composite: sentiment(40%) + low-inflation(30%) + low-rate(30%)
+  macroScore: 0.6151,        // Composite: sentiment(40%) + low-inflation(30%) + low-rate(30%)
 }
 
 export async function loadModels(basePath: string): Promise<void> {
