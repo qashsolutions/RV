@@ -1,0 +1,4 @@
+# Scraped data files (generated locally, not committed)
+*.json
+*.csv
+!.gitignore
