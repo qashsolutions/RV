@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "fred": {
+      "command": "npx",
+      "args": ["-y", "@stefanoamorelli/fred-mcp-server"],
+      "env": {
+        "FRED_API_KEY": "${FRED_API_KEY}"
+      }
+    }
+  }
+}

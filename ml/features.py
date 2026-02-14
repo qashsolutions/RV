@@ -303,7 +303,7 @@ def engineer_features(df: pd.DataFrame, is_training: bool = True) -> Tuple[pd.Da
 
 
 def get_feature_columns() -> List[str]:
-    """Feature columns for ML model input."""
+    """Feature columns for ML model input (20 hardware + 5 macro-economic)."""
     return [
         'age_years',
         'age_squared',
@@ -325,6 +325,14 @@ def get_feature_columns() -> List[str]:
         'price_log',
         'price_tier',
         'spec_score',
+        # FRED ASEAN macro-economic features (added by fred_data.merge_fred_features)
+        # cpi_index = Singapore CPI, consumer_sentiment = USD/SGD rate,
+        # fed_funds_rate = Semiconductor PPI (names kept stable for compatibility)
+        'cpi_index',
+        'cpi_yoy_change',
+        'consumer_sentiment',
+        'fed_funds_rate',
+        'macro_score',
     ]
 
 
