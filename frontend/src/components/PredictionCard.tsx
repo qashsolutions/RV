@@ -7,7 +7,11 @@ interface Props {
 }
 
 export function PredictionCard({ prediction, input }: Props) {
-  const { marketRatio, rvRatio, marketValue, rvValue, rvVsMarket, recommendation } = prediction
+  const {
+    marketRatio, marketRatioLow, marketRatioHigh,
+    rvRatio, marketValue, marketValueLow, marketValueHigh,
+    rvValue, rvVsMarket, recommendation,
+  } = prediction
 
   const formatUSD = (v: number) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
   const formatPct = (v: number) => `${(v * 100).toFixed(1)}%`
@@ -38,6 +42,15 @@ export function PredictionCard({ prediction, input }: Props) {
 
   const rec = recConfig[recommendation]
 
+  // Range bar positioning: shows where RV sits within the market prediction range
+  const rangeMin = Math.min(marketValueLow, rvValue) * 0.9
+  const rangeMax = Math.max(marketValueHigh, rvValue) * 1.1
+  const rangeSpan = rangeMax - rangeMin
+  const lowPct = ((marketValueLow - rangeMin) / rangeSpan) * 100
+  const highPct = ((marketValueHigh - rangeMin) / rangeSpan) * 100
+  const midPct = ((marketValue - rangeMin) / rangeSpan) * 100
+  const rvPct = ((rvValue - rangeMin) / rangeSpan) * 100
+
   return (
     <div className="space-y-4 fade-in">
       {/* Main prediction */}
@@ -49,7 +62,7 @@ export function PredictionCard({ prediction, input }: Props) {
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="bg-slate-800 rounded-lg p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Market Value</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Predicted Sale Price</p>
             <p className="text-2xl font-bold text-blue-400 mt-1">{formatUSD(marketValue)}</p>
             <p className="text-sm text-slate-400">{formatPct(marketRatio)} of purchase price</p>
           </div>
@@ -57,6 +70,62 @@ export function PredictionCard({ prediction, input }: Props) {
             <p className="text-xs text-slate-400 uppercase tracking-wider">Contractual RV</p>
             <p className="text-2xl font-bold text-emerald-400 mt-1">{formatUSD(rvValue)}</p>
             <p className="text-sm text-slate-400">{formatPct(rvRatio)} of purchase price</p>
+          </div>
+        </div>
+
+        {/* Prediction Range Visual */}
+        <div className="bg-slate-800 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Sale Price Range (90% CI)</p>
+            <p className="text-xs text-slate-500">
+              {formatUSD(marketValueLow)} - {formatUSD(marketValueHigh)}
+            </p>
+          </div>
+
+          {/* Range bar visualization */}
+          <div className="relative h-8 mt-3 mb-6">
+            {/* Background track */}
+            <div className="absolute inset-x-0 top-3 h-2 bg-slate-700 rounded-full" />
+
+            {/* Prediction range band */}
+            <div
+              className="absolute top-2 h-4 bg-blue-900/60 border border-blue-700/50 rounded-full"
+              style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
+            />
+
+            {/* Market value marker */}
+            <div
+              className="absolute top-0 w-3 h-8 -ml-1.5"
+              style={{ left: `${midPct}%` }}
+            >
+              <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 mx-auto" />
+              <div className="w-0.5 h-5 bg-blue-400 mx-auto" />
+            </div>
+
+            {/* RV marker */}
+            <div
+              className="absolute top-0 w-3 h-8 -ml-1.5"
+              style={{ left: `${rvPct}%` }}
+            >
+              <div className="w-3 h-3 rounded-full bg-emerald-500 border-2 border-emerald-300 mx-auto" />
+              <div className="w-0.5 h-5 bg-emerald-400 mx-auto" />
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border border-blue-300" />
+              <span className="text-slate-400">Predicted Sale ({formatUSD(marketValue)})</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-300" />
+              <span className="text-slate-400">Contractual RV ({formatUSD(rvValue)})</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-2 rounded bg-blue-900/60 border border-blue-700/50" />
+              <span className="text-slate-400">90% Range</span>
+            </div>
           </div>
         </div>
 

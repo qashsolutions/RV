@@ -40,8 +40,14 @@ export function Dashboard({ precomputed }: Props) {
   return (
     <div className="space-y-6 fade-in">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <KPICard title="Total Laptops" value={stats.total_records?.toLocaleString() || '0'} subtitle="in portfolio" />
+        <KPICard
+          title="With Sales Data"
+          value={stats.records_with_sales?.toLocaleString() || '0'}
+          subtitle={`${stats.records_imputed?.toLocaleString() || '0'} ML-predicted`}
+          color="text-blue-400"
+        />
         <KPICard
           title="Avg RV Ratio"
           value={formatPct(rvStats.mean || 0)}
@@ -140,6 +146,14 @@ export function Dashboard({ precomputed }: Props) {
               desc="The composite spec score (RAM + Storage + Processor Gen + CPU Tier) is the 2nd most important feature. Better-specced laptops hold value longer in the B2B resale market."
               severity="info"
             />
+
+            {stats.records_imputed > 0 && (
+              <InsightBlock
+                title="ML-Predicted Sale Prices"
+                desc={`${stats.records_imputed.toLocaleString()} units had no recorded sale price. Our ensemble model predicted their market value by comparing specs, brand, processor, RAM, storage, and lease terms against ${stats.records_with_sales?.toLocaleString()} laptops with known sale prices. Predictions include a 90% confidence interval.`}
+                severity="info"
+              />
+            )}
           </div>
         </div>
       </div>

@@ -21,8 +21,12 @@ export interface LaptopInput {
 
 export interface PredictionResult {
   marketRatio: number
+  marketRatioLow: number
+  marketRatioHigh: number
   rvRatio: number
   marketValue: number
+  marketValueLow: number
+  marketValueHigh: number
   rvValue: number
   confidence: number
   rvVsMarket: number
@@ -126,6 +130,10 @@ function buildFeatureVector(input: LaptopInput): number[] {
   ]
 }
 
+// Calibrated residual std from training (market model MAE ~0.024, std ~0.045)
+const MARKET_RESIDUAL_STD = 0.045
+const CI_MULTIPLIER = 1.645 // 90% confidence interval
+
 export function predict(input: LaptopInput): PredictionResult {
   if (!marketTree || !rvTree) {
     throw new Error('Models not loaded. Call loadModels() first.')
@@ -135,7 +143,14 @@ export function predict(input: LaptopInput): PredictionResult {
   const marketRatio = Math.max(0.05, Math.min(0.95, traverseTree(marketTree, features)))
   const rvRatio = Math.max(0.05, Math.min(0.95, traverseTree(rvTree, features)))
 
+  // Prediction range: calibrated 90% CI from training residuals
+  const uncertainty = CI_MULTIPLIER * MARKET_RESIDUAL_STD
+  const marketRatioLow = Math.max(0.03, marketRatio - uncertainty)
+  const marketRatioHigh = Math.min(0.95, marketRatio + uncertainty)
+
   const marketValue = marketRatio * input.purchasePrice
+  const marketValueLow = marketRatioLow * input.purchasePrice
+  const marketValueHigh = marketRatioHigh * input.purchasePrice
   const rvValue = rvRatio * input.purchasePrice
   const rvVsMarket = marketValue - rvValue
   const confidence = 0.85 // MDT single-model confidence
@@ -150,19 +165,33 @@ export function predict(input: LaptopInput): PredictionResult {
     recommendation = 'near_rv'
   }
 
-  return { marketRatio, rvRatio, marketValue, rvValue, confidence, rvVsMarket, recommendation }
+  return {
+    marketRatio, marketRatioLow, marketRatioHigh,
+    rvRatio, marketValue, marketValueLow, marketValueHigh,
+    rvValue, confidence, rvVsMarket, recommendation,
+  }
 }
 
 export function predictDepreciationCurve(
   input: LaptopInput,
   months: number[] = [6, 12, 18, 24, 30, 36, 42, 48]
-): Array<{ month: number; marketValue: number; rvValue: number; marketRatio: number; rvRatio: number }> {
+): Array<{
+  month: number
+  marketValue: number
+  marketValueLow: number
+  marketValueHigh: number
+  rvValue: number
+  marketRatio: number
+  rvRatio: number
+}> {
   return months.map(m => {
     const adjusted = { ...input, leaseDurationMonths: m }
     const result = predict(adjusted)
     return {
       month: m,
       marketValue: result.marketValue,
+      marketValueLow: result.marketValueLow,
+      marketValueHigh: result.marketValueHigh,
       rvValue: result.rvValue,
       marketRatio: result.marketRatio,
       rvRatio: result.rvRatio,
