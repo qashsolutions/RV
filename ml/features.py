@@ -273,15 +273,8 @@ def engineer_features(df: pd.DataFrame, is_training: bool = True) -> Tuple[pd.Da
     if spec_parts:
         df['spec_score'] = sum(spec_parts) / len(spec_parts)
 
-    # ---- Region & data source features ----
-    # source_region: 'ASEAN' (lease portfolio) vs 'UAE' (marketplace) etc.
-    if 'source_region' in df.columns:
-        region_map = {'asean': 0, 'uae': 1, 'sg': 0, 'singapore': 0}
-        df['region_encoded'] = df['source_region'].str.lower().map(region_map).fillna(0)
-    else:
-        df['region_encoded'] = 0  # default ASEAN
-
-    # Flag for estimated vs actual MSRP
+    # ---- Data source feature ----
+    # Flag for estimated vs actual MSRP (marketplace data has estimated prices)
     if 'msrp_estimated' in df.columns:
         df['is_estimated_price'] = df['msrp_estimated'].astype(int)
     else:
@@ -345,8 +338,7 @@ def get_feature_columns() -> List[str]:
         'consumer_sentiment',
         'fed_funds_rate',
         'macro_score',
-        # Region & data source features (for multi-region training)
-        'region_encoded',         # 0=ASEAN, 1=UAE
+        # Data source feature
         'is_estimated_price',     # 0=actual MSRP, 1=estimated from specs
     ]
 

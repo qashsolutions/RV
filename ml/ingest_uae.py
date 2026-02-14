@@ -177,14 +177,24 @@ def parse_processor_info(proc_str: str) -> Dict:
     if gen_match:
         result['gen'] = int(gen_match.group(1))
     else:
-        # From model number: i7-1185G7 → gen 11, i5-10310U → gen 10, i5-5300U → gen 5
-        mod_match = re.search(r'i[3579]-(\d{2})\d{2,3}', s)
+        # Extract full model number after i3/i5/i7/i9 dash
+        # Intel naming: Nxxx = gen N (4-digit, gen 1-9)
+        #               NNxxx = gen NN (5-digit, gen 10+)
+        #               1Nxx = gen 1N (4-digit, gen 10+ since 10th gen)
+        # Key insight: gen 10+ uses 4-digit (10xx-14xx) or 5-digit (10xxx) numbers.
+        # Pre-gen-10 used 4-digit where first digit = gen (e.g. 5300=gen5, 8365=gen8).
+        mod_match = re.search(r'i[3579]-(\d{4,5})', s)
         if mod_match:
-            result['gen'] = int(mod_match.group(1))
-        else:
-            mod_match = re.search(r'i[3579]-(\d)\d{3}', s)
-            if mod_match:
-                result['gen'] = int(mod_match.group(1))
+            model_num = mod_match.group(1)
+            if len(model_num) == 5:
+                # 5-digit: first 2 digits = gen (e.g. 10310 → gen 10)
+                result['gen'] = int(model_num[:2])
+            elif model_num[0] == '1' and int(model_num[:2]) >= 10:
+                # 4-digit starting with 1x where x>=0: gen 10+ (e.g. 1365→gen13, 1185→gen11, 1035→gen10)
+                result['gen'] = int(model_num[:2])
+            else:
+                # 4-digit, first digit = gen (e.g. 5300 → gen 5, 8365 → gen 8, 9750 → gen 9)
+                result['gen'] = int(model_num[0])
 
     result['year'] = PROC_GEN_YEAR.get(result['gen'], 2020)
 
@@ -360,17 +370,40 @@ def ingest_uae_json(json_path: str) -> pd.DataFrame:
             skipped += 1
             continue
 
-        model_series = str(item.get('model_series', item.get('title', ''))).strip()
-        processor_str = str(item.get('processor', '')).strip()
-        ram_gb = int(item.get('ram_gb', 0) or 0)
-        storage_gb = int(item.get('storage_gb', 0) or 0)
-        storage_type = str(item.get('storage_type', 'SSD')).upper()
-        screen_size = float(item.get('screen_size', 14) or 14)
-        condition = str(item.get('condition', 'Renewed'))
-        scraped_at = str(item.get('scraped_at', '2026-02-14'))
+        model_series = str(item.get('model_series') or item.get('title', '')).strip()
+        processor_str = str(item.get('processor') or '').strip()
+        title = str(item.get('title') or '').strip()
+        ram_gb = int(item.get('ram_gb') or 0)
+        storage_gb = int(item.get('storage_gb') or 0)
+        storage_type = str(item.get('storage_type') or 'SSD').upper()
+        screen_size_raw = item.get('screen_size')
+        # Filter out nonsensical screen sizes (>20" is likely wrong for a laptop)
+        screen_size = float(screen_size_raw) if screen_size_raw and 8 <= float(screen_size_raw) <= 20 else 14.0
+        condition = str(item.get('condition') or 'Renewed')
+        scraped_at = str(item.get('scraped_at') or '2026-02-14')
 
-        # Parse processor info
+        # Parse processor info — try processor field first, then extract from title
         proc_info = parse_processor_info(processor_str)
+        if proc_info['gen'] == 0 and title:
+            # Try to extract processor from title text
+            proc_from_title = re.search(
+                r'((?:Core\s+)?i[3579][-\s]\w+|Xeon\s+\w+|M[1-4]\s*(?:Pro|Max|Ultra)?|Ryzen\s+\d\s+\w+)',
+                title, re.IGNORECASE
+            )
+            if proc_from_title:
+                processor_str = proc_from_title.group(1).strip()
+                proc_info = parse_processor_info(processor_str)
+
+        # Try to extract RAM/storage from title if missing
+        if ram_gb == 0 and title:
+            ram_match = re.search(r'(\d+)\s*GB\s*RAM', title, re.IGNORECASE)
+            if ram_match:
+                ram_gb = int(ram_match.group(1))
+        if storage_gb == 0 and title:
+            stor_match = re.search(r'(\d+)\s*(?:GB|TB)\s*(?:SSD|Solid|Hard|HDD|NVMe)', title, re.IGNORECASE)
+            if stor_match:
+                val = int(stor_match.group(1))
+                storage_gb = val * 1000 if 'TB' in stor_match.group(0).upper() else val
 
         # Detect model line
         model_line = detect_model_line(brand, model_series)
@@ -393,8 +426,20 @@ def ingest_uae_json(json_path: str) -> pd.DataFrame:
             proc_year=proc_info['year'],
         )
 
-        # Estimate age
-        age_months = estimate_age_months(proc_info['year'], scraped_at)
+        # Use actual age_months / model_year if available, else estimate from processor
+        actual_age = item.get('age_months')
+        actual_year = item.get('model_year')
+        if actual_age and actual_age > 0:
+            age_months = int(actual_age)
+        elif actual_year and actual_year > 2000:
+            try:
+                scrape = datetime.strptime(scraped_at[:10], "%Y-%m-%d")
+            except (ValueError, TypeError):
+                scrape = datetime.now()
+            purchase_date = datetime(int(actual_year), 7, 1)
+            age_months = max(1, round((scrape - purchase_date).days / 30.44))
+        else:
+            age_months = estimate_age_months(proc_info['year'], scraped_at)
 
         # Compute dates
         try:
