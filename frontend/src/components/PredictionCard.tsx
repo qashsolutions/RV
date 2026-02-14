@@ -163,20 +163,19 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
 
           {/* CI Methodology Notes */}
           <div className="mt-4 pt-3 border-t border-slate-700/50">
-            <p className="text-[10px] text-slate-500 italic mb-1.5">Confidence interval methodology & assumptions:</p>
-            <ul className="space-y-0.5 text-[10px] text-slate-500 italic list-none">
-              <li>Calibrated from 7,210 Dell laptop resale transactions (2021-2024 ASEAN B2B market)</li>
-              <li>Empirical quantile method — bands derived from actual residual percentiles, not Gaussian z-multipliers (residual distribution is non-normal: skew = -1.06, kurtosis = 8.4)</li>
-              <li>80% CI = 80th percentile of absolute prediction errors on held-out validation set (80/20 train-test split, random seed 42)</li>
-              <li>Segment-specific calibration — {input.modelLine === 'workstation'
-                ? 'Workstation (Precision): n=298 units, verified 79.5% actual coverage'
+            <p className="text-[10px] text-slate-500 italic mb-1.5">How we arrived at these confidence ranges:</p>
+            <ul className="space-y-0.5 text-[10px] text-slate-500 italic pl-3">
+              <li>Based on 7,210 actual Dell laptop resale prices in the ASEAN B2B market (2021-2024)</li>
+              <li>Ranges are set so that 80% (or 90%) of past sales actually fell within these bands</li>
+              <li>{input.modelLine === 'workstation'
+                ? 'Workstation segment: trained on 298 units, 79.5% of past sales fell within the 80% band'
                 : input.modelLine === 'business_standard'
-                ? 'Business Standard (Latitude): n=6,912 units, verified 83.6% actual coverage'
-                : 'Default (conservative): using wider business standard bands as fallback'}</li>
-              <li>Ensemble model: XGBoost + LightGBM + Decision Tree, weighted by validation R-squared</li>
-              <li>Macro-economic inputs held constant: USD/SGD exchange rate (~1.34), Singapore CPI (~117.5), Semiconductor PPI (~107)</li>
-              <li>Assumes future market conditions remain broadly similar to the 2021-2024 training period</li>
-              <li>Single-brand calibration (Dell only) — CI bands may differ for other manufacturers</li>
+                ? 'Business laptop segment: trained on 6,912 units, 83.6% of past sales fell within the 80% band'
+                : 'Using conservative wider bands as a safety margin for this segment'}</li>
+              <li>Prediction uses 3 models combined (XGBoost, LightGBM, Decision Tree) for better accuracy</li>
+              <li>Factors in USD/SGD exchange rate, Singapore inflation, and global semiconductor costs</li>
+              <li>Assumes market conditions stay broadly similar to the 2021-2024 period</li>
+              <li>Currently calibrated for Dell only — accuracy may vary for other brands</li>
             </ul>
           </div>
         </div>
