@@ -95,7 +95,7 @@ export default function App() {
             <div className="space-y-6 fade-in">
               {prediction && currentInput ? (
                 <>
-                  <PredictionCard prediction={prediction} input={currentInput} />
+                  <PredictionCard prediction={prediction} input={currentInput} depCurve={depCurve} />
                   <DepreciationChart data={depCurve} purchasePrice={currentInput.purchasePrice} />
                 </>
               ) : (
