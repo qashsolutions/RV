@@ -9,7 +9,9 @@ interface Props {
 export function PredictionCard({ prediction, input }: Props) {
   const {
     marketRatio, marketRatioLow, marketRatioHigh,
+    marketRatioLow50, marketRatioHigh50,
     rvRatio, marketValue, marketValueLow, marketValueHigh,
+    marketValueLow50, marketValueHigh50,
     rvValue, rvVsMarket, recommendation,
   } = prediction
 
@@ -48,6 +50,8 @@ export function PredictionCard({ prediction, input }: Props) {
   const rangeSpan = rangeMax - rangeMin
   const lowPct = ((marketValueLow - rangeMin) / rangeSpan) * 100
   const highPct = ((marketValueHigh - rangeMin) / rangeSpan) * 100
+  const low50Pct = ((marketValueLow50 - rangeMin) / rangeSpan) * 100
+  const high50Pct = ((marketValueHigh50 - rangeMin) / rangeSpan) * 100
   const midPct = ((marketValue - rangeMin) / rangeSpan) * 100
   const rvPct = ((rvValue - rangeMin) / rangeSpan) * 100
 
@@ -75,10 +79,16 @@ export function PredictionCard({ prediction, input }: Props) {
 
         {/* Prediction Range Visual */}
         <div className="bg-slate-800 rounded-lg p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Sale Price Range (90% CI)</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Sale Price Range</p>
             <p className="text-xs text-slate-500">
               {formatUSD(marketValueLow)} - {formatUSD(marketValueHigh)}
+            </p>
+          </div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-blue-400 font-medium">Most Probable (50% CI)</p>
+            <p className="text-xs text-blue-400">
+              {formatUSD(marketValueLow50)} - {formatUSD(marketValueHigh50)}
             </p>
           </div>
 
@@ -87,10 +97,16 @@ export function PredictionCard({ prediction, input }: Props) {
             {/* Background track */}
             <div className="absolute inset-x-0 top-3 h-2 bg-slate-700 rounded-full" />
 
-            {/* Prediction range band */}
+            {/* 90% outer prediction range band */}
             <div
-              className="absolute top-2 h-4 bg-blue-900/60 border border-blue-700/50 rounded-full"
+              className="absolute top-2 h-4 bg-blue-900/40 border border-blue-700/30 rounded-full"
               style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
+            />
+
+            {/* 50% inner confidence band — most probable range */}
+            <div
+              className="absolute top-1.5 h-5 bg-blue-600/40 border border-blue-500/60 rounded-full"
+              style={{ left: `${low50Pct}%`, width: `${high50Pct - low50Pct}%` }}
             />
 
             {/* Market value marker */}
@@ -113,7 +129,7 @@ export function PredictionCard({ prediction, input }: Props) {
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border border-blue-300" />
               <span className="text-slate-400">Predicted Sale ({formatUSD(marketValue)})</span>
@@ -123,7 +139,11 @@ export function PredictionCard({ prediction, input }: Props) {
               <span className="text-slate-400">Contractual RV ({formatUSD(rvValue)})</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-6 h-2 rounded bg-blue-900/60 border border-blue-700/50" />
+              <div className="w-6 h-2.5 rounded bg-blue-600/40 border border-blue-500/60" />
+              <span className="text-slate-400">50% Most Probable</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-2 rounded bg-blue-900/40 border border-blue-700/30" />
               <span className="text-slate-400">90% Range</span>
             </div>
           </div>
