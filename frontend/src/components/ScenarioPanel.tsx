@@ -44,14 +44,9 @@ export function ScenarioPanel({ events, onChange, sentimentScore, sentimentConfi
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Market Scenarios</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Toggle events to see how they impact the predicted resale value</p>
-        </div>
-        {enabledCount > 0 && (
-          <span className="tag tag-yellow whitespace-nowrap text-[10px] px-2.5 py-0.5">{enabledCount} active</span>
-        )}
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold text-white">Market Scenarios</h2>
+        <p className="text-xs text-slate-400 mt-0.5">Toggle events to see how they impact the predicted resale value</p>
       </div>
 
       {/* Sentiment indicator */}
