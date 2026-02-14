@@ -1,12 +1,25 @@
 import React from 'react'
 import type { PredictionResult, LaptopInput } from '../predictor'
 
+interface CurvePoint {
+  month: number
+  marketValue: number
+  marketValueLow: number
+  marketValueHigh: number
+  marketValueLow50: number
+  marketValueHigh50: number
+  rvValue: number
+  marketRatio: number
+  rvRatio: number
+}
+
 interface Props {
   prediction: PredictionResult
   input: LaptopInput
+  depCurve?: CurvePoint[]
 }
 
-export function PredictionCard({ prediction, input }: Props) {
+export function PredictionCard({ prediction, input, depCurve }: Props) {
   const {
     marketRatio, marketRatioLow, marketRatioHigh,
     marketRatioLow50, marketRatioHigh50,
@@ -166,6 +179,82 @@ export function PredictionCard({ prediction, input }: Props) {
           <p className="text-xs text-slate-400 mt-2">{rec.desc}</p>
         </div>
       </div>
+
+      {/* Yearly Price Outlook */}
+      {depCurve && depCurve.length > 0 && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-white mb-1">Yearly Price Outlook</h3>
+          <p className="text-xs text-slate-500 mb-4">Predicted sale price at each year-end with confidence bands</p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[12, 24, 36, 48].map(month => {
+              const point = depCurve.find(d => d.month === month)
+              if (!point) return null
+              const year = month / 12
+              const retention = point.marketRatio * 100
+
+              // Mini range bar positions
+              const barMin = point.marketValueLow * 0.95
+              const barMax = point.marketValueHigh * 1.05
+              const barSpan = barMax - barMin
+              const bar90Left = ((point.marketValueLow - barMin) / barSpan) * 100
+              const bar90Width = ((point.marketValueHigh - point.marketValueLow) / barSpan) * 100
+              const bar50Left = ((point.marketValueLow50 - barMin) / barSpan) * 100
+              const bar50Width = ((point.marketValueHigh50 - point.marketValueLow50) / barSpan) * 100
+              const barMid = ((point.marketValue - barMin) / barSpan) * 100
+
+              return (
+                <div key={month} className="bg-slate-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-300">Year {year}</span>
+                    <span className="text-xs text-slate-500">{retention.toFixed(0)}% retained</span>
+                  </div>
+
+                  <p className="text-lg font-bold text-blue-400">{formatUSD(point.marketValue)}</p>
+
+                  {/* Mini confidence band bar */}
+                  <div className="relative h-4 mt-2 mb-2">
+                    <div className="absolute inset-x-0 top-1.5 h-1 bg-slate-700 rounded-full" />
+                    {/* 90% band */}
+                    <div
+                      className="absolute top-1 h-2 bg-blue-900/40 border border-blue-700/30 rounded-full"
+                      style={{ left: `${bar90Left}%`, width: `${bar90Width}%` }}
+                    />
+                    {/* 50% band */}
+                    <div
+                      className="absolute top-0.5 h-3 bg-blue-600/50 border border-blue-500/60 rounded-full"
+                      style={{ left: `${bar50Left}%`, width: `${bar50Width}%` }}
+                    />
+                    {/* Center marker */}
+                    <div
+                      className="absolute top-0 w-2 h-4 -ml-1"
+                      style={{ left: `${barMid}%` }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 border border-blue-300 mx-auto mt-0.5" />
+                    </div>
+                  </div>
+
+                  {/* Ranges text */}
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-blue-400 font-medium">50% CI</span>
+                      <span className="text-[10px] text-blue-400">
+                        {formatUSD(point.marketValueLow50)} - {formatUSD(point.marketValueHigh50)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500">90% CI</span>
+                      <span className="text-[10px] text-slate-500">
+                        {formatUSD(point.marketValueLow)} - {formatUSD(point.marketValueHigh)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Configuration summary */}
       <div className="card">
