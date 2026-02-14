@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { loadModels, predict, predictDepreciationCurve, type LaptopInput, type PredictionResult } from './predictor'
+import { loadModels, predict, predictDepreciationCurve, getActiveScenarioEvents, getSentimentData, DEFAULT_FI_PARAMS, type LaptopInput, type PredictionResult, type ScenarioEvent, type FIParams } from './predictor'
 import { PredictionCard } from './components/PredictionCard'
 import { DepreciationChart } from './components/DepreciationChart'
 import { LaptopForm } from './components/LaptopForm'
 import { Dashboard } from './components/Dashboard'
 import { FleetView } from './components/FleetView'
+import { ScenarioPanel } from './components/ScenarioPanel'
+import { FIParamsPanel } from './components/FIParamsPanel'
 
 type Tab = 'predict' | 'dashboard' | 'fleet'
 
@@ -16,6 +18,11 @@ export default function App() {
   const [currentInput, setCurrentInput] = useState<LaptopInput | null>(null)
   const [precomputed, setPrecomputed] = useState<any>(null)
 
+  // v2: scenario & FI state
+  const [scenarioEvents, setScenarioEvents] = useState<ScenarioEvent[]>([])
+  const [fiParams, setFIParams] = useState<FIParams>(DEFAULT_FI_PARAMS)
+  const [showFI, setShowFI] = useState(false)
+
   useEffect(() => {
     const base = import.meta.env.BASE_URL + 'models'
     Promise.all([
@@ -24,24 +31,59 @@ export default function App() {
     ]).then(([_, pc]) => {
       setPrecomputed(pc)
       setModelsLoaded(true)
+      setScenarioEvents(getActiveScenarioEvents())
     }).catch(err => {
       console.error('Failed to load models:', err)
-      // Still mark as loaded so the UI is usable
       setModelsLoaded(true)
+      setScenarioEvents(getActiveScenarioEvents())
     })
   }, [])
 
   const handlePredict = useCallback((input: LaptopInput) => {
     try {
-      const result = predict(input)
+      const fiToUse = showFI ? fiParams : undefined
+      const result = predict(input, scenarioEvents, fiToUse)
       setPrediction(result)
       setCurrentInput(input)
-      const curve = predictDepreciationCurve(input)
+      const curve = predictDepreciationCurve(input, undefined, scenarioEvents, fiToUse)
       setDepCurve(curve)
     } catch (err) {
       console.error('Prediction error:', err)
     }
-  }, [])
+  }, [scenarioEvents, fiParams, showFI])
+
+  // Re-predict when scenarios toggle
+  const handleScenarioChange = useCallback((events: ScenarioEvent[]) => {
+    setScenarioEvents(events)
+    if (currentInput) {
+      try {
+        const fiToUse = showFI ? fiParams : undefined
+        const result = predict(currentInput, events, fiToUse)
+        setPrediction(result)
+        const curve = predictDepreciationCurve(currentInput, undefined, events, fiToUse)
+        setDepCurve(curve)
+      } catch (err) {
+        console.error('Scenario prediction error:', err)
+      }
+    }
+  }, [currentInput, fiParams, showFI])
+
+  // Re-predict when FI params change
+  const handleFIChange = useCallback((fi: FIParams) => {
+    setFIParams(fi)
+    if (currentInput) {
+      try {
+        const result = predict(currentInput, scenarioEvents, fi)
+        setPrediction(result)
+        const curve = predictDepreciationCurve(currentInput, undefined, scenarioEvents, fi)
+        setDepCurve(curve)
+      } catch (err) {
+        console.error('FI prediction error:', err)
+      }
+    }
+  }, [currentInput, scenarioEvents])
+
+  const sentiment = getSentimentData()
 
   return (
     <div className="min-h-screen">
@@ -85,14 +127,34 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === 'predict' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left: Form */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left column: Form + Scenarios + FI */}
             <div className="space-y-6">
               <LaptopForm onSubmit={handlePredict} disabled={!modelsLoaded} />
+
+              {/* FI toggle */}
+              <button
+                onClick={() => setShowFI(!showFI)}
+                className="w-full text-left text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+              >
+                <svg className={`w-3 h-3 transition-transform ${showFI ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+                {showFI ? 'Hide' : 'Show'} financial institution parameters
+              </button>
+              {showFI && <FIParamsPanel params={fiParams} onChange={handleFIChange} />}
+
+              <ScenarioPanel
+                events={scenarioEvents}
+                onChange={handleScenarioChange}
+                sentimentScore={sentiment?.score}
+                sentimentConfidence={sentiment?.confidence}
+                sentimentHeadlines={sentiment?.headlines}
+              />
             </div>
 
-            {/* Right: Results */}
-            <div className="space-y-6 fade-in">
+            {/* Right columns: Results (spans 2 cols) */}
+            <div className="lg:col-span-2 space-y-6 fade-in">
               {prediction && currentInput ? (
                 <>
                   <PredictionCard prediction={prediction} input={currentInput} depCurve={depCurve} />
@@ -105,6 +167,7 @@ export default function App() {
                   </svg>
                   <p className="text-lg font-medium">Enter laptop details</p>
                   <p className="text-sm mt-1">Fill the form to get AI-powered residual value predictions</p>
+                  <p className="text-xs text-slate-600 mt-3">Toggle market scenarios on the left to see how events impact price</p>
                 </div>
               )}
             </div>

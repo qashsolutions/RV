@@ -196,6 +196,88 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
           </div>
           <p className="text-xs text-slate-400 mt-2">{rec.desc}</p>
         </div>
+
+        {/* Scenario adjustment display */}
+        {prediction.scenarioAdjustment && prediction.scenarioAdjustment.eventDetails.length > 0 && (
+          <div className="bg-slate-800 rounded-lg p-4 border border-amber-700/30">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-amber-400 uppercase tracking-wider font-medium">Scenario-Adjusted Forecast</p>
+              <span className="text-xs text-slate-500">
+                {(prediction.scenarioAdjustment.combinedConfidence * 100).toFixed(0)}% confidence
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <p className="text-[10px] text-slate-500">Adjusted Value</p>
+                <p className="text-lg font-bold text-amber-400">
+                  {formatUSD(prediction.adjustedMarketValue ?? marketValue)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500">Low End</p>
+                <p className="text-sm font-medium text-slate-400">
+                  {formatUSD(prediction.adjustedMarketValueLow ?? marketValueLow)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500">High End</p>
+                <p className="text-sm font-medium text-slate-400">
+                  {formatUSD(prediction.adjustedMarketValueHigh ?? marketValueHigh)}
+                </p>
+              </div>
+            </div>
+            {/* Per-event breakdown */}
+            <div className="space-y-1">
+              {prediction.scenarioAdjustment.eventDetails.map((ed, i) => (
+                <div key={i} className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400 truncate mr-2">{ed.title}</span>
+                  <span className={ed.impactLowPct + ed.impactHighPct > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {ed.impactLowPct > 0 ? '+' : ''}{ed.impactLowPct.toFixed(1)}% to {ed.impactHighPct > 0 ? '+' : ''}{ed.impactHighPct.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+              {prediction.scenarioAdjustment.sentimentContrib !== 0 && (
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Market sentiment</span>
+                  <span className={prediction.scenarioAdjustment.sentimentContrib > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    {prediction.scenarioAdjustment.sentimentContrib > 0 ? '+' : ''}{prediction.scenarioAdjustment.sentimentContrib.toFixed(2)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* FI financial summary */}
+        {prediction.fiNetProceeds !== undefined && (
+          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+            <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-3">Financial Institution View</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] text-slate-500">Net Proceeds (after costs & tax)</p>
+                <p className={`text-lg font-bold ${(prediction.fiNetProceeds ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatUSD(prediction.fiNetProceeds ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500">Net Present Value</p>
+                <p className={`text-lg font-bold ${(prediction.fiNPV ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                  {formatUSD(prediction.fiNPV ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500">Total Costs (disposal + holding + insurance)</p>
+                <p className="text-sm font-medium text-slate-300">{formatUSD(prediction.fiTotalCosts ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500">Meets Target Margin?</p>
+                <p className={`text-sm font-bold ${prediction.fiBreakeven ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {prediction.fiBreakeven ? 'Yes' : 'No'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Yearly Price Outlook — from Month 24 onwards for FI planning */}
