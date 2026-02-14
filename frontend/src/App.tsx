@@ -7,8 +7,10 @@ import { Dashboard } from './components/Dashboard'
 import { FleetView } from './components/FleetView'
 import { ScenarioPanel } from './components/ScenarioPanel'
 import { FIParamsPanel } from './components/FIParamsPanel'
+import { ThemeToggle } from './components/ThemeToggle'
 
 type Tab = 'predict' | 'dashboard' | 'fleet'
+type Theme = 'dark' | 'light'
 
 export default function App() {
   const [modelsLoaded, setModelsLoaded] = useState(false)
@@ -17,6 +19,21 @@ export default function App() {
   const [depCurve, setDepCurve] = useState<any[]>([])
   const [currentInput, setCurrentInput] = useState<LaptopInput | null>(null)
   const [precomputed, setPrecomputed] = useState<any>(null)
+
+  // Theme state (persisted in localStorage)
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('equipval-theme')
+    return (saved === 'light' || saved === 'dark') ? saved : 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('equipval-theme', theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
+  }, [])
 
   // v2: scenario & FI state
   const [scenarioEvents, setScenarioEvents] = useState<ScenarioEvent[]>([])
@@ -116,10 +133,11 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className={`tag ${modelsLoaded ? 'tag-green' : 'tag-yellow'}`}>
               {modelsLoaded ? 'Models Ready' : 'Loading...'}
             </span>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
       </header>
