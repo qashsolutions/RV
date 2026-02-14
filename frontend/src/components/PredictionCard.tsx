@@ -99,7 +99,7 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
             </p>
           </div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-blue-400 font-medium">Most Probable (50% CI)</p>
+            <p className="text-xs text-blue-400 font-medium">Most Likely Range (80% CI)</p>
             <p className="text-xs text-blue-400">
               {formatUSD(marketValueLow50)} - {formatUSD(marketValueHigh50)}
             </p>
@@ -116,7 +116,7 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
               style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
             />
 
-            {/* 50% inner confidence band — most probable range */}
+            {/* 80% inner confidence band — most likely range */}
             <div
               className="absolute top-1.5 h-5 bg-blue-600/40 border border-blue-500/60 rounded-full"
               style={{ left: `${low50Pct}%`, width: `${high50Pct - low50Pct}%` }}
@@ -153,7 +153,7 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-6 h-2.5 rounded bg-blue-600/40 border border-blue-500/60" />
-              <span className="text-slate-400">50% Most Probable</span>
+              <span className="text-slate-400">80% Most Likely</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-6 h-2 rounded bg-blue-900/40 border border-blue-700/30" />
@@ -180,18 +180,23 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
         </div>
       </div>
 
-      {/* Yearly Price Outlook */}
+      {/* Yearly Price Outlook — from Month 24 onwards for FI planning */}
       {depCurve && depCurve.length > 0 && (
         <div className="card">
-          <h3 className="text-sm font-semibold text-white mb-1">Yearly Price Outlook</h3>
-          <p className="text-xs text-slate-500 mb-4">Predicted sale price at each year-end with confidence bands</p>
+          <h3 className="text-sm font-semibold text-white mb-1">Future Market Value Forecast</h3>
+          <p className="text-xs text-slate-500 mb-4">Projected resale value from Year 2 onwards — for lease-end planning</p>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[12, 24, 36, 48].map(month => {
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[24, 36, 48].map(month => {
               const point = depCurve.find(d => d.month === month)
               if (!point) return null
               const year = month / 12
               const retention = point.marketRatio * 100
+              const depFromPrev = month === 24 ? null :
+                depCurve.find(d => d.month === month - 12)
+              const yoyDrop = depFromPrev
+                ? ((depFromPrev.marketRatio - point.marketRatio) / depFromPrev.marketRatio * 100)
+                : null
 
               // Mini range bar positions
               const barMin = point.marketValueLow * 0.95
@@ -199,46 +204,51 @@ export function PredictionCard({ prediction, input, depCurve }: Props) {
               const barSpan = barMax - barMin
               const bar90Left = ((point.marketValueLow - barMin) / barSpan) * 100
               const bar90Width = ((point.marketValueHigh - point.marketValueLow) / barSpan) * 100
-              const bar50Left = ((point.marketValueLow50 - barMin) / barSpan) * 100
-              const bar50Width = ((point.marketValueHigh50 - point.marketValueLow50) / barSpan) * 100
+              const bar80Left = ((point.marketValueLow50 - barMin) / barSpan) * 100
+              const bar80Width = ((point.marketValueHigh50 - point.marketValueLow50) / barSpan) * 100
               const barMid = ((point.marketValue - barMin) / barSpan) * 100
 
               return (
-                <div key={month} className="bg-slate-800 rounded-lg p-3">
+                <div key={month} className="bg-slate-800 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-300">Year {year}</span>
-                    <span className="text-xs text-slate-500">{retention.toFixed(0)}% retained</span>
+                    <span className="text-sm font-semibold text-slate-200">Year {year}</span>
+                    <div className="flex items-center gap-2">
+                      {yoyDrop !== null && (
+                        <span className="text-[10px] text-red-400">-{yoyDrop.toFixed(0)}% YoY</span>
+                      )}
+                      <span className="text-xs text-slate-500">{retention.toFixed(0)}% of purchase</span>
+                    </div>
                   </div>
 
-                  <p className="text-lg font-bold text-blue-400">{formatUSD(point.marketValue)}</p>
+                  <p className="text-xl font-bold text-blue-400">{formatUSD(point.marketValue)}</p>
 
-                  {/* Mini confidence band bar */}
-                  <div className="relative h-4 mt-2 mb-2">
-                    <div className="absolute inset-x-0 top-1.5 h-1 bg-slate-700 rounded-full" />
+                  {/* Confidence band bar */}
+                  <div className="relative h-5 mt-3 mb-2">
+                    <div className="absolute inset-x-0 top-2 h-1 bg-slate-700 rounded-full" />
                     {/* 90% band */}
                     <div
-                      className="absolute top-1 h-2 bg-blue-900/40 border border-blue-700/30 rounded-full"
+                      className="absolute top-1 h-3 bg-blue-900/40 border border-blue-700/30 rounded-full"
                       style={{ left: `${bar90Left}%`, width: `${bar90Width}%` }}
                     />
-                    {/* 50% band */}
+                    {/* 80% band */}
                     <div
-                      className="absolute top-0.5 h-3 bg-blue-600/50 border border-blue-500/60 rounded-full"
-                      style={{ left: `${bar50Left}%`, width: `${bar50Width}%` }}
+                      className="absolute top-0.5 h-4 bg-blue-600/50 border border-blue-500/60 rounded-full"
+                      style={{ left: `${bar80Left}%`, width: `${bar80Width}%` }}
                     />
                     {/* Center marker */}
                     <div
-                      className="absolute top-0 w-2 h-4 -ml-1"
+                      className="absolute top-0 w-2.5 h-5 -ml-1"
                       style={{ left: `${barMid}%` }}
                     >
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 border border-blue-300 mx-auto mt-0.5" />
+                      <div className="w-2 h-2 rounded-full bg-blue-400 border border-blue-300 mx-auto" />
                     </div>
                   </div>
 
                   {/* Ranges text */}
-                  <div className="space-y-0.5">
+                  <div className="space-y-1 mt-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-blue-400 font-medium">50% CI</span>
-                      <span className="text-[10px] text-blue-400">
+                      <span className="text-[11px] text-blue-400 font-medium">80% CI</span>
+                      <span className="text-[11px] text-blue-400 font-medium">
                         {formatUSD(point.marketValueLow50)} - {formatUSD(point.marketValueHigh50)}
                       </span>
                     </div>
