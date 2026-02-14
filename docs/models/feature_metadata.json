@@ -63,5 +63,19 @@
     "consumer": 1,
     "desktop": 1,
     "unknown": 2
-  }
+  },
+  "fred_defaults": {
+    "cpi_index": 117.5,
+    "cpi_yoy_change": 0.028,
+    "consumer_sentiment": 1.34,
+    "fed_funds_rate": 107.0,
+    "macro_score": 0.6525
+  },
+  "fred_feature_columns": [
+    "cpi_index",
+    "cpi_yoy_change",
+    "consumer_sentiment",
+    "fed_funds_rate",
+    "macro_score"
+  ]
 }
