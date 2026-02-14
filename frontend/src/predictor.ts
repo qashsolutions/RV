@@ -231,6 +231,7 @@ function buildFeatureVector(input: LaptopInput): number[] {
     input.screenInches, screenBucket,
     priceLog, priceTier, specScore,
     cpiIndex, cpiYoyChange, consumerSentiment, fedFundsRate, macroScore,
+    0,  // is_estimated_price: 0=actual MSRP (browser predictions use known prices)
   ]
 }
 
