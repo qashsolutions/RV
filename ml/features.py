@@ -273,6 +273,20 @@ def engineer_features(df: pd.DataFrame, is_training: bool = True) -> Tuple[pd.Da
     if spec_parts:
         df['spec_score'] = sum(spec_parts) / len(spec_parts)
 
+    # ---- Region & data source features ----
+    # source_region: 'ASEAN' (lease portfolio) vs 'UAE' (marketplace) etc.
+    if 'source_region' in df.columns:
+        region_map = {'asean': 0, 'uae': 1, 'sg': 0, 'singapore': 0}
+        df['region_encoded'] = df['source_region'].str.lower().map(region_map).fillna(0)
+    else:
+        df['region_encoded'] = 0  # default ASEAN
+
+    # Flag for estimated vs actual MSRP
+    if 'msrp_estimated' in df.columns:
+        df['is_estimated_price'] = df['msrp_estimated'].astype(int)
+    else:
+        df['is_estimated_price'] = 0
+
     # ---- Target variables ----
     if is_training:
         if 'price' in df.columns and 'rv' in df.columns:
@@ -303,7 +317,7 @@ def engineer_features(df: pd.DataFrame, is_training: bool = True) -> Tuple[pd.Da
 
 
 def get_feature_columns() -> List[str]:
-    """Feature columns for ML model input (20 hardware + 5 macro-economic)."""
+    """Feature columns for ML model input (20 hardware + 5 macro + 2 region)."""
     return [
         'age_years',
         'age_squared',
@@ -326,13 +340,14 @@ def get_feature_columns() -> List[str]:
         'price_tier',
         'spec_score',
         # FRED ASEAN macro-economic features (added by fred_data.merge_fred_features)
-        # cpi_index = Singapore CPI, consumer_sentiment = USD/SGD rate,
-        # fed_funds_rate = Semiconductor PPI (names kept stable for compatibility)
         'cpi_index',
         'cpi_yoy_change',
         'consumer_sentiment',
         'fed_funds_rate',
         'macro_score',
+        # Region & data source features (for multi-region training)
+        'region_encoded',         # 0=ASEAN, 1=UAE
+        'is_estimated_price',     # 0=actual MSRP, 1=estimated from specs
     ]
 
 
@@ -356,9 +371,13 @@ def save_metadata(metadata: Dict, output_dir: str):
 
 
 def load_data(filepath: str) -> pd.DataFrame:
-    """Load data from Excel or CSV."""
+    """Load data from Excel, CSV, or JSON (UAE marketplace format)."""
     if filepath.endswith(('.xlsx', '.xls')):
         return pd.read_excel(filepath, engine='openpyxl')
     elif filepath.endswith('.csv'):
         return pd.read_csv(filepath)
+    elif filepath.endswith('.json'):
+        # UAE marketplace JSON → convert via ingest_uae
+        from ingest_uae import ingest_uae_json
+        return ingest_uae_json(filepath)
     raise ValueError(f"Unsupported format: {filepath}")

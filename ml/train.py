@@ -77,7 +77,7 @@ def load_all_data(data_path: str) -> pd.DataFrame:
         return load_data(str(path))
     if path.is_dir():
         frames = []
-        for f in sorted(path.glob('*.xlsx')) + sorted(path.glob('*.csv')):
+        for f in sorted(path.glob('*.xlsx')) + sorted(path.glob('*.csv')) + sorted(path.glob('*.json')):
             print(f"Loading {f.name}...")
             frames.append(load_data(str(f)))
         if not frames:
