@@ -23,10 +23,14 @@ export interface PredictionResult {
   marketRatio: number
   marketRatioLow: number
   marketRatioHigh: number
+  marketRatioLow50: number
+  marketRatioHigh50: number
   rvRatio: number
   marketValue: number
   marketValueLow: number
   marketValueHigh: number
+  marketValueLow50: number
+  marketValueHigh50: number
   rvValue: number
   confidence: number
   rvVsMarket: number
@@ -133,6 +137,7 @@ function buildFeatureVector(input: LaptopInput): number[] {
 // Calibrated residual std from training (market model MAE ~0.024, std ~0.045)
 const MARKET_RESIDUAL_STD = 0.045
 const CI_MULTIPLIER = 1.645 // 90% confidence interval
+const CI_MULTIPLIER_50 = 0.674 // 50% confidence interval (most probable range)
 
 export function predict(input: LaptopInput): PredictionResult {
   if (!marketTree || !rvTree) {
@@ -148,9 +153,16 @@ export function predict(input: LaptopInput): PredictionResult {
   const marketRatioLow = Math.max(0.03, marketRatio - uncertainty)
   const marketRatioHigh = Math.min(0.95, marketRatio + uncertainty)
 
+  // Narrower 50% CI — the "most probable" selling range
+  const uncertainty50 = CI_MULTIPLIER_50 * MARKET_RESIDUAL_STD
+  const marketRatioLow50 = Math.max(0.03, marketRatio - uncertainty50)
+  const marketRatioHigh50 = Math.min(0.95, marketRatio + uncertainty50)
+
   const marketValue = marketRatio * input.purchasePrice
   const marketValueLow = marketRatioLow * input.purchasePrice
   const marketValueHigh = marketRatioHigh * input.purchasePrice
+  const marketValueLow50 = marketRatioLow50 * input.purchasePrice
+  const marketValueHigh50 = marketRatioHigh50 * input.purchasePrice
   const rvValue = rvRatio * input.purchasePrice
   const rvVsMarket = marketValue - rvValue
   const confidence = 0.85 // MDT single-model confidence
@@ -167,7 +179,9 @@ export function predict(input: LaptopInput): PredictionResult {
 
   return {
     marketRatio, marketRatioLow, marketRatioHigh,
+    marketRatioLow50, marketRatioHigh50,
     rvRatio, marketValue, marketValueLow, marketValueHigh,
+    marketValueLow50, marketValueHigh50,
     rvValue, confidence, rvVsMarket, recommendation,
   }
 }
@@ -180,6 +194,8 @@ export function predictDepreciationCurve(
   marketValue: number
   marketValueLow: number
   marketValueHigh: number
+  marketValueLow50: number
+  marketValueHigh50: number
   rvValue: number
   marketRatio: number
   rvRatio: number
@@ -192,6 +208,8 @@ export function predictDepreciationCurve(
       marketValue: result.marketValue,
       marketValueLow: result.marketValueLow,
       marketValueHigh: result.marketValueHigh,
+      marketValueLow50: result.marketValueLow50,
+      marketValueHigh50: result.marketValueHigh50,
       rvValue: result.rvValue,
       marketRatio: result.marketRatio,
       rvRatio: result.rvRatio,

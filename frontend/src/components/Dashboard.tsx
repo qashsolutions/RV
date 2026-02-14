@@ -40,13 +40,19 @@ export function Dashboard({ precomputed }: Props) {
   return (
     <div className="space-y-6 fade-in">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KPICard title="Total Laptops" value={stats.total_records?.toLocaleString() || '0'} subtitle="in portfolio" />
         <KPICard
-          title="With Sales Data"
+          title="Actual Sales"
           value={stats.records_with_sales?.toLocaleString() || '0'}
-          subtitle={`${stats.records_imputed?.toLocaleString() || '0'} ML-predicted`}
+          subtitle="recorded sale prices"
           color="text-blue-400"
+        />
+        <KPICard
+          title="ML-Predicted"
+          value={stats.records_imputed?.toLocaleString() || '0'}
+          subtitle="sale prices imputed"
+          color="text-violet-400"
         />
         <KPICard
           title="Avg RV Ratio"
