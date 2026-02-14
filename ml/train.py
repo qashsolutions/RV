@@ -291,7 +291,281 @@ def main():
                 save_all(rv_models, rv_weights, metadata, rv_metrics,
                          available, args.export_frontend, prefix="rv")
 
+    # ======== IMPUTE MISSING SALE PRICES & GENERATE PRECOMPUTED ========
+    if args.export_frontend and 'market_models' in dir() and 'rv_models' in dir():
+        generate_precomputed(
+            df_feat, available, market_models, market_weights,
+            rv_models, rv_weights, args.export_frontend
+        )
+
     print("\n\nAll training complete!")
+
+
+def impute_missing_sales(df, feature_cols, market_models, market_weights):
+    """
+    For rows without Sales Price, predict it using the ensemble market model.
+    Uses model disagreement to compute confidence intervals.
+    Returns the dataframe with imputed values and confidence bands.
+    """
+    missing_mask = df['market_ratio'].isna() | ~np.isfinite(df['market_ratio'])
+    has_mask = ~missing_mask
+
+    if missing_mask.sum() == 0:
+        print("No missing sales prices to impute.")
+        return df
+
+    print(f"\n{'='*50}")
+    print(f"IMPUTING SALES PRICES FOR {missing_mask.sum()} ROWS")
+    print(f"(using {has_mask.sum()} rows with known sales as training data)")
+    print(f"{'='*50}")
+
+    X_missing = df.loc[missing_mask, feature_cols].fillna(0).values
+    valid = np.isfinite(X_missing).all(axis=1)
+    valid_idx = df.loc[missing_mask].index[valid]
+    X_missing = X_missing[valid]
+
+    # Predict with each model in the ensemble
+    predictions = {}
+    for name, info in market_models.items():
+        pred = info['model'].predict(X_missing)
+        pred = np.clip(pred, 0.03, 0.95)
+        predictions[name] = pred
+
+    # Weighted ensemble prediction
+    ensemble_pred = np.zeros(len(X_missing))
+    for name, pred in predictions.items():
+        ensemble_pred += market_weights[name] * pred
+
+    # Confidence interval from model disagreement
+    pred_matrix = np.column_stack(list(predictions.values()))
+    pred_std = np.std(pred_matrix, axis=1)
+
+    # Also compute global residual stats from training set for calibration
+    has_data = df.loc[has_mask]
+    X_has = has_data[feature_cols].fillna(0).values
+    y_has = has_data['market_ratio'].values
+    valid_has = np.isfinite(X_has).all(axis=1) & np.isfinite(y_has)
+    X_has, y_has = X_has[valid_has], y_has[valid_has]
+
+    ensemble_has = np.zeros(len(X_has))
+    for name, info in market_models.items():
+        ensemble_has += market_weights[name] * info['model'].predict(X_has)
+    residuals = y_has - ensemble_has
+    global_std = float(np.std(residuals))
+    global_mae = float(np.mean(np.abs(residuals)))
+
+    # Combined uncertainty: model disagreement + residual calibration
+    # Use the larger of model std or calibrated residual std
+    uncertainty = np.maximum(pred_std, global_std)
+
+    # Set imputed values
+    df.loc[valid_idx, 'market_ratio'] = ensemble_pred
+    df.loc[valid_idx, 'market_ratio_low'] = np.clip(ensemble_pred - 1.645 * uncertainty, 0.03, 0.95)
+    df.loc[valid_idx, 'market_ratio_high'] = np.clip(ensemble_pred + 1.645 * uncertainty, 0.03, 0.95)
+    df.loc[valid_idx, 'is_imputed'] = True
+
+    # Compute sale prices from ratios
+    prices = df.loc[valid_idx, 'price']
+    df.loc[valid_idx, 'sales_price'] = ensemble_pred * prices
+    df.loc[valid_idx, 'sales_price_low'] = df.loc[valid_idx, 'market_ratio_low'] * prices
+    df.loc[valid_idx, 'sales_price_high'] = df.loc[valid_idx, 'market_ratio_high'] * prices
+
+    # Mark rows that already had data
+    df.loc[has_mask, 'is_imputed'] = False
+    df.loc[has_mask, 'market_ratio_low'] = df.loc[has_mask, 'market_ratio'] - 1.645 * global_std
+    df.loc[has_mask, 'market_ratio_high'] = df.loc[has_mask, 'market_ratio'] + 1.645 * global_std
+    df.loc[has_mask, 'market_ratio_low'] = df.loc[has_mask, 'market_ratio_low'].clip(0.03, 0.95)
+    df.loc[has_mask, 'market_ratio_high'] = df.loc[has_mask, 'market_ratio_high'].clip(0.03, 0.95)
+
+    print(f"Imputed {len(valid_idx)} rows")
+    print(f"Mean imputed market ratio: {ensemble_pred.mean():.4f}")
+    print(f"Mean uncertainty (std): {uncertainty.mean():.4f}")
+    print(f"Global residual MAE: {global_mae:.4f}")
+    print(f"90% CI width: +/- {(1.645 * uncertainty.mean()):.4f}")
+
+    return df
+
+
+def generate_precomputed(df, feature_cols, market_models, market_weights,
+                         rv_models, rv_weights, output_dir):
+    """Generate precomputed.json with imputed sales and prediction ranges."""
+
+    # Impute missing sales prices first
+    df = impute_missing_sales(df, feature_cols, market_models, market_weights)
+
+    # ---- Compute stats ----
+    stats = {}
+    stats['total_records'] = int(len(df))
+    stats['records_with_sales'] = int((~df.get('is_imputed', pd.Series(dtype=bool)).fillna(True)).sum())
+    stats['records_imputed'] = int(df.get('is_imputed', pd.Series(dtype=bool)).fillna(False).sum())
+
+    if 'brand_clean' in df.columns:
+        stats['brands'] = sorted(df['brand_clean'].dropna().unique().tolist())
+    if 'model' in df.columns:
+        top_models = df['model'].value_counts().head(5).index.tolist()
+        stats['models'] = top_models
+    if 'model_line' in df.columns:
+        stats['model_lines'] = sorted(df['model_line'].dropna().unique().tolist())
+
+    if 'processor' in df.columns:
+        stats['processors'] = sorted(df['processor'].dropna().unique().tolist())
+    if 'ram_gb' in df.columns:
+        stats['ram_values'] = sorted(df['ram_gb'].dropna().unique().tolist())
+    if 'storage_gb' in df.columns:
+        stats['storage_values'] = sorted(df['storage_gb'].dropna().unique().tolist())
+    if 'screen_inches' in df.columns:
+        stats['screen_sizes'] = sorted(df['screen_inches'].dropna().unique().tolist())
+    if 'lease_duration_months' in df.columns:
+        stats['terms'] = sorted(df['lease_duration_months'].dropna().unique().tolist())
+
+    if 'price' in df.columns:
+        p = df['price'].dropna()
+        stats['price_range'] = {
+            'min': float(p.min()), 'max': float(p.max()),
+            'mean': float(p.mean()), 'median': float(p.median()),
+        }
+
+    if 'rv_ratio' in df.columns:
+        r = df['rv_ratio'].dropna()
+        stats['rv_ratio_stats'] = {
+            'mean': float(r.mean()), 'std': float(r.std()),
+            'min': float(r.min()), 'max': float(r.max()),
+        }
+
+    if 'market_ratio' in df.columns:
+        m = df['market_ratio'].dropna()
+        stats['market_ratio_stats'] = {
+            'mean': float(m.mean()), 'std': float(m.std()),
+            'min': float(m.min()), 'max': float(m.max()),
+        }
+
+    # RV accuracy (only on non-imputed rows)
+    non_imputed = df[df.get('is_imputed', pd.Series(dtype=bool)).fillna(True) == False]
+    if 'rv' in non_imputed.columns and 'sales_price' in non_imputed.columns:
+        rv = pd.to_numeric(non_imputed['rv'], errors='coerce')
+        sp = pd.to_numeric(non_imputed['sales_price'], errors='coerce')
+        valid_both = rv.notna() & sp.notna()
+        if valid_both.sum() > 0:
+            diff = sp[valid_both] - rv[valid_both]
+            stats['rv_accuracy'] = {
+                'mean_diff': float(diff.mean()),
+                'median_diff': float(diff.median()),
+                'pct_below_rv': float((diff < 0).mean()),
+                'pct_above_rv': float((diff > 0).mean()),
+                'avg_loss_when_below': float(diff[diff < 0].mean()) if (diff < 0).sum() > 0 else 0,
+                'avg_gain_when_above': float(diff[diff > 0].mean()) if (diff > 0).sum() > 0 else 0,
+            }
+
+    # Imputation quality stats
+    if 'market_ratio_low' in df.columns:
+        imputed = df[df.get('is_imputed', pd.Series(dtype=bool)).fillna(False) == True]
+        if len(imputed) > 0:
+            widths = imputed['market_ratio_high'] - imputed['market_ratio_low']
+            stats['imputation_stats'] = {
+                'count': int(len(imputed)),
+                'mean_range_width': float(widths.mean()),
+                'mean_predicted_ratio': float(imputed['market_ratio'].mean()),
+                'mean_predicted_price': float(imputed['sales_price'].mean()) if 'sales_price' in imputed else 0,
+            }
+
+    # ---- Generate precomputed predictions with ranges ----
+    configs = [
+        # (label, model_line, model_tier, proc_tier, proc_gen, is_xeon, ram, storage, screen)
+        ('Latitude 5000-i5-Gen10', 'business_standard', 5, 3, 10, False, 16, 256, 14.0),
+        ('Latitude 5000-i5-Gen10', 'business_standard', 5, 3, 10, False, 16, 512, 14.0),
+        ('Latitude 5000-i5-Gen11', 'business_standard', 5, 3, 11, False, 16, 256, 14.0),
+        ('Latitude 5000-i5-Gen11', 'business_standard', 5, 3, 11, False, 16, 512, 14.0),
+        ('Latitude 5000-i7-Gen10', 'business_standard', 5, 4, 10, False, 16, 512, 14.0),
+        ('Latitude 5000-i7-Gen11', 'business_standard', 5, 4, 11, False, 16, 512, 14.0),
+        ('Latitude 7000-i5-Gen10', 'business_standard', 7, 3, 10, False, 16, 256, 14.0),
+        ('Latitude 7000-i5-Gen11', 'business_standard', 7, 3, 11, False, 16, 256, 14.0),
+        ('Latitude 7000-i7-Gen10', 'business_standard', 7, 4, 10, False, 16, 512, 13.3),
+        ('Latitude 7000-i7-Gen11', 'business_standard', 7, 4, 11, False, 16, 512, 13.3),
+        ('Latitude 7000-i7-Gen11', 'business_standard', 7, 4, 11, False, 16, 512, 14.0),
+        ('Latitude 7000-i7-Gen12', 'business_standard', 7, 4, 12, False, 16, 512, 14.0),
+        ('Latitude 7000-i5-Gen11-8GB', 'business_standard', 7, 3, 11, False, 8, 256, 14.0),
+        ('Latitude 7000-i7-Gen11-32GB', 'business_standard', 7, 4, 11, False, 32, 512, 14.0),
+        ('Precision 7000-iX-Gen10', 'workstation', 7, 5, 10, True, 32, 1000, 15.6),
+        ('Precision 7000-iX-Gen11', 'workstation', 7, 5, 11, True, 32, 1000, 15.6),
+        ('Precision 7000-iX-Gen10-64GB', 'workstation', 7, 5, 10, True, 64, 1000, 15.6),
+        ('Precision 5000-i7-Gen11', 'workstation', 5, 4, 11, False, 16, 512, 15.6),
+        ('XPS 13-i7-Gen11', 'premium', 9, 4, 11, False, 16, 512, 13.3),
+        ('XPS 15-i7-Gen11', 'premium', 9, 4, 11, False, 16, 512, 15.6),
+    ]
+
+    prices = [1200, 1500, 1800, 2000, 2500, 3000]
+    terms = [24, 36]
+
+    from features import (
+        BRAND_TIER_ENCODING, BRAND_RETENTION, MODEL_LINE_ENCODING
+    )
+
+    predictions = []
+    for cfg in configs:
+        label, ml, mt, pt, pg, ix, ram, stor, scr = cfg
+        ram_str = f'-{ram}GB' if ram != 16 else ''
+        stor_str = f'-{stor}GB' if stor else ''
+        config_name = f"{label}{ram_str}{stor_str}"
+
+        for price in prices:
+            for term in terms:
+                age = term / 12.0
+                bt = BRAND_TIER_ENCODING.get('Business', 3)
+                br = BRAND_RETENTION.get('Dell', 0.98)
+                mle = MODEL_LINE_ENCODING.get(ml, 3)
+                rl = np.log2(max(1, ram))
+                sl = np.log2(max(1, stor))
+                sb = 1 if scr < 12.5 else 2 if scr <= 13.5 else 3 if scr <= 14.5 else 4 if scr <= 16 else 5
+                pl = np.log1p(price)
+                ptier = 1 if price < 1000 else 2 if price < 1500 else 3 if price < 2000 else 4 if price < 3000 else 5
+                ss = (ram / 64.0 + stor / 2000.0 + pg / 13.0 + pt / 5.0) / 4
+
+                features = np.array([[
+                    age, age**2, term, bt, br, mle, mt, pg, pt,
+                    1 if ix else 0, ram, rl, stor, sl, 1 if stor > 0 else 0,
+                    scr, sb, pl, ptier, ss
+                ]])
+
+                # Market predictions with range
+                market_preds = {}
+                for name, info in market_models.items():
+                    market_preds[name] = float(info['model'].predict(features)[0])
+                market_ensemble = sum(market_weights[n] * p for n, p in market_preds.items())
+                market_std = float(np.std(list(market_preds.values())))
+
+                # RV predictions
+                rv_preds = {}
+                for name, info in rv_models.items():
+                    rv_preds[name] = float(info['model'].predict(features)[0])
+                rv_ensemble = sum(rv_weights[n] * p for n, p in rv_preds.items())
+
+                mr = round(max(0.03, min(0.95, market_ensemble)), 4)
+                mr_low = round(max(0.03, min(0.95, market_ensemble - 1.645 * max(market_std, 0.02))), 4)
+                mr_high = round(max(0.03, min(0.95, market_ensemble + 1.645 * max(market_std, 0.02))), 4)
+                rr = round(max(0.03, min(0.95, rv_ensemble)), 4)
+
+                predictions.append({
+                    'config': config_name,
+                    'price': price,
+                    'term': term,
+                    'market_ratio': mr,
+                    'market_ratio_low': mr_low,
+                    'market_ratio_high': mr_high,
+                    'rv_ratio': rr,
+                    'market_value': round(mr * price, 2),
+                    'market_value_low': round(mr_low * price, 2),
+                    'market_value_high': round(mr_high * price, 2),
+                    'rv_value': round(rr * price, 2),
+                })
+
+    output = {'stats': stats, 'predictions': predictions}
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, 'precomputed.json')
+    with open(path, 'w') as f:
+        json.dump(output, f, indent=2)
+    print(f"\nPrecomputed data saved to {path}")
+    print(f"  Stats keys: {list(stats.keys())}")
+    print(f"  Predictions: {len(predictions)} configurations")
 
 
 if __name__ == '__main__':
