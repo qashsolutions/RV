@@ -1,16 +1,20 @@
 """
-FRED (Federal Reserve Economic Data) integration for macro-economic features.
+FRED (Federal Reserve Economic Data) integration for ASEAN macro-economic features.
 
-Fetches CPI, Consumer Sentiment, and Federal Funds Rate from the FRED API,
-caches locally as CSV, and maps indicators to dates in the training data.
+Fetches ASEAN-relevant indicators from FRED:
+  - DEXSIUS:          USD/SGD exchange rate (primary ASEAN B2B market)
+  - SGPCPIALLMINMEI:  Singapore CPI (ASEAN inflation proxy)
+  - PCU33443344:      US PPI Semiconductors (global component cost proxy)
+
+These replace the original US-centric series (CPI, UMCSENT, FEDFUNDS) because:
+  - Dell laptops are priced in USD, sold in ASEAN local currency
+  - USD/SGD is the #1 external driver: when USD strengthens, used laptops
+    become cheaper in local terms → lower resale values
+  - Singapore CPI reflects ASEAN buyer purchasing power, not US consumers
+  - Semiconductor PPI is global (supply chain is worldwide), so US series is valid
 
 Requires: FRED_API_KEY environment variable or passed as argument.
 Get a free key at: https://fred.stlouisfed.org/docs/api/api_key.html
-
-FRED series used:
-  - CPIAUCSL: Consumer Price Index for All Urban Consumers (monthly)
-  - UMCSENT:  University of Michigan Consumer Sentiment (monthly)
-  - FEDFUNDS: Effective Federal Funds Rate (monthly)
 """
 
 import os
@@ -24,21 +28,21 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
-# Series IDs and their descriptions
+# ASEAN-relevant FRED series
 FRED_SERIES = {
-    'CPIAUCSL': 'Consumer Price Index (All Urban Consumers)',
-    'UMCSENT': 'Consumer Sentiment (U. Michigan)',
-    'FEDFUNDS': 'Federal Funds Rate',
+    'DEXSIUS': 'USD/SGD Exchange Rate',
+    'SGPCPIALLMINMEI': 'Singapore CPI (All Items)',
+    'PCU33443344': 'PPI Semiconductors (global proxy)',
 }
 
 CACHE_DIR = Path(__file__).parent / '.fred_cache'
 
 # Defaults used when FRED data is unavailable (approximate 2024 values)
 DEFAULTS = {
-    'cpi_index': 314.0,       # CPI ~314 as of late 2024
-    'cpi_yoy_change': 0.031,  # ~3.1% YoY inflation
-    'consumer_sentiment': 67.0,  # UMCSENT ~67
-    'fed_funds_rate': 5.33,   # ~5.33% fed funds rate
+    'cpi_index': 117.5,         # Singapore CPI ~117.5 (base 2019=100)
+    'cpi_yoy_change': 0.028,    # ~2.8% YoY Singapore inflation (2024)
+    'consumer_sentiment': 1.34,  # USD/SGD rate ~1.34 (proxy for ASEAN demand)
+    'fed_funds_rate': 107.0,    # Semiconductor PPI index ~107 (2017=100)
 }
 
 
@@ -87,17 +91,17 @@ def fetch_all_series(api_key: str, use_cache: bool = True) -> pd.DataFrame:
     Fetch all FRED series, merge into a single monthly DataFrame.
     Caches to disk to avoid repeated API calls.
     """
-    cache_path = CACHE_DIR / 'fred_monthly.csv'
+    cache_path = CACHE_DIR / 'fred_asean_monthly.csv'
 
     if use_cache and cache_path.exists():
         cached = pd.read_csv(cache_path, parse_dates=['date'])
         age_days = (datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)).days
         if age_days < 30:
-            print(f"Using cached FRED data ({len(cached)} rows, {age_days}d old)")
+            print(f"Using cached FRED ASEAN data ({len(cached)} rows, {age_days}d old)")
             return cached
         print(f"FRED cache is {age_days}d old, refreshing...")
 
-    print("Fetching FRED economic indicators...")
+    print("Fetching FRED ASEAN economic indicators...")
     merged = None
 
     for series_id, desc in FRED_SERIES.items():
@@ -121,29 +125,29 @@ def fetch_all_series(api_key: str, use_cache: bool = True) -> pd.DataFrame:
     merged = merged.ffill()
 
     # Compute derived features
-    if 'CPIAUCSL' in merged.columns:
-        # Year-over-year CPI change (inflation rate)
-        merged['cpi_yoy_change'] = merged['CPIAUCSL'].pct_change(periods=12)
+    if 'SGPCPIALLMINMEI' in merged.columns:
+        # Year-over-year CPI change (Singapore inflation rate)
+        merged['cpi_yoy_change'] = merged['SGPCPIALLMINMEI'].pct_change(periods=12)
 
     # Cache
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     merged.to_csv(cache_path, index=False)
-    print(f"Cached FRED data: {len(merged)} rows -> {cache_path}")
+    print(f"Cached FRED ASEAN data: {len(merged)} rows -> {cache_path}")
 
     return merged
 
 
 def merge_fred_features(df: pd.DataFrame, fred_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Merge FRED economic indicators into the training DataFrame by date.
+    Merge FRED ASEAN economic indicators into the training DataFrame by date.
 
     Maps each row's end_date (lease end / sale date) to the nearest
-    monthly FRED observation. Adds columns:
-      - cpi_index: CPI level (normalized to 100-scale for model stability)
-      - cpi_yoy_change: Year-over-year inflation rate
-      - consumer_sentiment: U. Michigan sentiment index
-      - fed_funds_rate: Effective federal funds rate
-      - macro_score: Composite macro-economic health score
+    monthly FRED observation. Adds columns (names kept stable for model compatibility):
+      - cpi_index: Singapore CPI (normalized to 100-scale)
+      - cpi_yoy_change: Year-over-year Singapore inflation rate
+      - consumer_sentiment: USD/SGD exchange rate (demand/currency proxy)
+      - fed_funds_rate: Semiconductor PPI (global component cost proxy)
+      - macro_score: Composite ASEAN macro score
     """
     df = df.copy()
 
@@ -169,27 +173,22 @@ def merge_fred_features(df: pd.DataFrame, fred_df: pd.DataFrame) -> pd.DataFrame
 
     # Merge on month
     fred_cols = ['_fred_month']
-    if 'CPIAUCSL' in fred_df.columns:
-        fred_cols.append('CPIAUCSL')
-    if 'cpi_yoy_change' in fred_df.columns:
-        fred_cols.append('cpi_yoy_change')
-    if 'UMCSENT' in fred_df.columns:
-        fred_cols.append('UMCSENT')
-    if 'FEDFUNDS' in fred_df.columns:
-        fred_cols.append('FEDFUNDS')
+    for col in ['SGPCPIALLMINMEI', 'cpi_yoy_change', 'DEXSIUS', 'PCU33443344']:
+        if col in fred_df.columns:
+            fred_cols.append(col)
 
     fred_subset = fred_df[fred_cols].drop_duplicates(subset=['_fred_month'], keep='last')
     df = df.merge(fred_subset, on='_fred_month', how='left')
     df.drop(columns=['_fred_month'], inplace=True)
 
-    # Rename to feature names
+    # Rename to feature names (kept stable for model compatibility)
     rename_map = {}
-    if 'CPIAUCSL' in df.columns:
-        rename_map['CPIAUCSL'] = 'cpi_index'
-    if 'UMCSENT' in df.columns:
-        rename_map['UMCSENT'] = 'consumer_sentiment'
-    if 'FEDFUNDS' in df.columns:
-        rename_map['FEDFUNDS'] = 'fed_funds_rate'
+    if 'SGPCPIALLMINMEI' in df.columns:
+        rename_map['SGPCPIALLMINMEI'] = 'cpi_index'
+    if 'DEXSIUS' in df.columns:
+        rename_map['DEXSIUS'] = 'consumer_sentiment'  # USD/SGD rate
+    if 'PCU33443344' in df.columns:
+        rename_map['PCU33443344'] = 'fed_funds_rate'   # Semiconductor PPI
     df.rename(columns=rename_map, inplace=True)
 
     # Fill any remaining NaN with defaults
@@ -198,33 +197,34 @@ def merge_fred_features(df: pd.DataFrame, fred_df: pd.DataFrame) -> pd.DataFrame
     df['consumer_sentiment'] = df.get('consumer_sentiment', pd.Series(dtype=float)).fillna(DEFAULTS['consumer_sentiment'])
     df['fed_funds_rate'] = df.get('fed_funds_rate', pd.Series(dtype=float)).fillna(DEFAULTS['fed_funds_rate'])
 
-    # Normalize CPI to 100-scale for model stability (base: 2020 CPI ~258)
-    df['cpi_index'] = df['cpi_index'] / 258.0 * 100.0
+    # Normalize Singapore CPI to 100-scale (base: 2019 SG CPI ~100)
+    df['cpi_index'] = df['cpi_index'] / 100.0 * 100.0  # Already ~100-based, keep as-is
 
-    # Composite macro score (higher = healthier economy = stronger used laptop demand)
-    # Weighted: sentiment (positive), low inflation (negative impact), moderate rates
+    # Composite ASEAN macro score (higher = stronger used laptop demand)
+    # Weighted: weak USD/SGD (strong SGD = higher local purchasing power),
+    #           low inflation, low component costs (cheaper replacement = lower RV)
     df['macro_score'] = (
-        (df['consumer_sentiment'] / 100.0) * 0.4 +
-        (1.0 - df['cpi_yoy_change'].clip(0, 0.10) / 0.10) * 0.3 +
-        (1.0 - df['fed_funds_rate'].clip(0, 10) / 10.0) * 0.3
+        (1.0 / df['consumer_sentiment'].clip(1.0, 2.0)) * 0.4 +  # Strong SGD = high demand
+        (1.0 - df['cpi_yoy_change'].clip(0, 0.10) / 0.10) * 0.3 +  # Low inflation = good
+        (1.0 - (df['fed_funds_rate'].clip(80, 130) - 80) / 50.0) * 0.3  # Low semi cost = cheaper new laptops
     )
 
     matched = df['cpi_index'].notna().sum()
-    print(f"FRED features merged: {matched}/{len(df)} rows matched by date")
+    print(f"FRED ASEAN features merged: {matched}/{len(df)} rows matched by date")
 
     return df
 
 
 def _apply_defaults(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply default FRED values when API data is unavailable."""
-    df['cpi_index'] = DEFAULTS['cpi_index'] / 258.0 * 100.0
+    """Apply default FRED ASEAN values when API data is unavailable."""
+    df['cpi_index'] = DEFAULTS['cpi_index']
     df['cpi_yoy_change'] = DEFAULTS['cpi_yoy_change']
     df['consumer_sentiment'] = DEFAULTS['consumer_sentiment']
     df['fed_funds_rate'] = DEFAULTS['fed_funds_rate']
     df['macro_score'] = (
-        (DEFAULTS['consumer_sentiment'] / 100.0) * 0.4 +
+        (1.0 / min(max(DEFAULTS['consumer_sentiment'], 1.0), 2.0)) * 0.4 +
         (1.0 - min(DEFAULTS['cpi_yoy_change'], 0.10) / 0.10) * 0.3 +
-        (1.0 - min(DEFAULTS['fed_funds_rate'], 10) / 10.0) * 0.3
+        (1.0 - (min(max(DEFAULTS['fed_funds_rate'], 80), 130) - 80) / 50.0) * 0.3
     )
     return df
 
@@ -242,19 +242,19 @@ def get_fred_feature_columns():
 
 def get_fred_defaults():
     """Return current default values for frontend/inference use."""
-    cpi_norm = DEFAULTS['cpi_index'] / 258.0 * 100.0
-    sentiment = DEFAULTS['consumer_sentiment']
-    rate = DEFAULTS['fed_funds_rate']
+    cpi_norm = DEFAULTS['cpi_index']
+    usd_sgd = DEFAULTS['consumer_sentiment']
+    semi_ppi = DEFAULTS['fed_funds_rate']
     yoy = DEFAULTS['cpi_yoy_change']
     macro = (
-        (sentiment / 100.0) * 0.4 +
+        (1.0 / min(max(usd_sgd, 1.0), 2.0)) * 0.4 +
         (1.0 - min(yoy, 0.10) / 0.10) * 0.3 +
-        (1.0 - min(rate, 10) / 10.0) * 0.3
+        (1.0 - (min(max(semi_ppi, 80), 130) - 80) / 50.0) * 0.3
     )
     return {
         'cpi_index': round(cpi_norm, 4),
         'cpi_yoy_change': round(yoy, 4),
-        'consumer_sentiment': round(sentiment, 2),
-        'fed_funds_rate': round(rate, 2),
+        'consumer_sentiment': round(usd_sgd, 4),
+        'fed_funds_rate': round(semi_ppi, 2),
         'macro_score': round(macro, 4),
     }
