@@ -1,0 +1,86 @@
+name: Model Retrain
+
+on:
+  workflow_dispatch:
+    inputs:
+      data_file:
+        description: 'Path to training data (relative to repo root)'
+        required: false
+        default: 'data/LaptopPortfolio.xlsx'
+      reason:
+        description: 'Reason for retraining'
+        required: false
+        default: 'Scheduled retrain'
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install ML dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install xgboost lightgbm scikit-learn openpyxl onnx skl2onnx joblib
+
+      - name: Retrain models
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          python ml/train.py \
+            --data ./${{ github.event.inputs.data_file }} \
+            --output ./frontend/public/models \
+            ${FRED_API_KEY:+--fred-api-key $FRED_API_KEY}
+
+      - name: Register model version
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python -c "
+          import json, os
+          from datetime import date
+          from backend.db.client import get_client
+
+          manifest_path = 'frontend/public/models/manifest.json'
+          with open(manifest_path) as f:
+              manifest = json.load(f)
+
+          db = get_client()
+
+          # Deactivate previous model
+          db.table('model_versions').update({'is_active': False}).eq('is_active', True).execute()
+
+          # Insert new model version
+          version_tag = f'v{manifest.get(\"version\", \"1.0\")}-{date.today().isoformat()}'
+          db.table('model_versions').insert({
+              'version_tag': version_tag,
+              'training_rows': manifest.get('training_rows', 0),
+              'market_r2': manifest.get('market_r2'),
+              'rv_r2': manifest.get('rv_r2'),
+              'market_mae': manifest.get('market_mae'),
+              'rv_mae': manifest.get('rv_mae'),
+              'features_used': manifest.get('features', []),
+              'training_config': manifest.get('hyperparams', {}),
+              'artifact_path': 'frontend/public/models/',
+              'is_active': True,
+          }).execute()
+
+          print(f'Registered model version: {version_tag}')
+          "
+
+      - name: Commit retrained models
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/models/ || true
+          git diff --staged --quiet || git commit -m "chore: retrain models — ${{ github.event.inputs.reason }}"
+          git push || true
