@@ -1,0 +1,72 @@
+{
+  "market": {
+    "weights": {
+      "xgboost": 0.3335948435982979,
+      "lightgbm": 0.333243057518589,
+      "mdt": 0.33316209888311316
+    },
+    "features": [
+      "age_years",
+      "age_squared",
+      "lease_duration_months",
+      "brand_tier_encoded",
+      "brand_retention",
+      "model_line_encoded",
+      "model_tier",
+      "processor_gen",
+      "processor_tier",
+      "is_xeon",
+      "ram_gb",
+      "ram_log",
+      "storage_gb",
+      "storage_log",
+      "has_ssd",
+      "screen_inches",
+      "screen_bucket",
+      "price_log",
+      "price_tier",
+      "spec_score"
+    ],
+    "metrics": {
+      "r2": 0.7120778254598299,
+      "mae": 0.024227818123229196,
+      "rmse": 0.04522052402738476,
+      "avg_std": 0.0003628180970258914
+    }
+  },
+  "rv": {
+    "weights": {
+      "xgboost": 0.33463970083118133,
+      "lightgbm": 0.33360759151094277,
+      "mdt": 0.3317527076578759
+    },
+    "features": [
+      "age_years",
+      "age_squared",
+      "lease_duration_months",
+      "brand_tier_encoded",
+      "brand_retention",
+      "model_line_encoded",
+      "model_tier",
+      "processor_gen",
+      "processor_tier",
+      "is_xeon",
+      "ram_gb",
+      "ram_log",
+      "storage_gb",
+      "storage_log",
+      "has_ssd",
+      "screen_inches",
+      "screen_bucket",
+      "price_log",
+      "price_tier",
+      "spec_score"
+    ],
+    "metrics": {
+      "r2": 0.9371294377226964,
+      "mae": 0.0011580074074544172,
+      "rmse": 0.0024346089330783394,
+      "avg_std": 0.00010803212423691847
+    }
+  }
+}
