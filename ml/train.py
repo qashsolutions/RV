@@ -556,6 +556,7 @@ def generate_precomputed(df, feature_cols, market_models, market_weights,
                     fred_defs['cpi_index'], fred_defs['cpi_yoy_change'],
                     fred_defs['consumer_sentiment'], fred_defs['fed_funds_rate'],
                     fred_defs['macro_score'],
+                    0,  # is_estimated_price (precomputed configs use actual MSRP)
                 ]])
 
                 # Market predictions with range

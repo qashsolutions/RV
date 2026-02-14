@@ -276,7 +276,7 @@ def engineer_features(df: pd.DataFrame, is_training: bool = True) -> Tuple[pd.Da
     # ---- Data source feature ----
     # Flag for estimated vs actual MSRP (marketplace data has estimated prices)
     if 'msrp_estimated' in df.columns:
-        df['is_estimated_price'] = df['msrp_estimated'].astype(int)
+        df['is_estimated_price'] = df['msrp_estimated'].fillna(0).astype(int)
     else:
         df['is_estimated_price'] = 0
 
