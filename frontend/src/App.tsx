@@ -117,7 +117,7 @@ export default function App() {
           <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
             {([
               ['predict', 'Predict'],
-              ['dashboard', 'Insights'],
+              ['dashboard', 'Portfolio Analysis'],
               ['fleet', 'Fleet'],
             ] as [Tab, string][]).map(([tab, label]) => (
               <button

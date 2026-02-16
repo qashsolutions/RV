@@ -79,7 +79,7 @@ export function Dashboard({ precomputed }: Props) {
         <div className="card">
           <h3 className="text-lg font-semibold text-white mb-4">RV vs Actual Sales</h3>
           <p className="text-sm text-slate-400 mb-4">
-            How often does the contractual RV match actual market value?
+            How often does the proposed RV match actual market value?
           </p>
 
           <div className="h-52">
@@ -108,7 +108,7 @@ export function Dashboard({ precomputed }: Props) {
 
           <div className="space-y-2 mt-2">
             <InsightRow
-              label="Sold below contractual RV"
+              label="Sold below proposed RV"
               value={formatPct(rvAccuracy.pct_below_rv || 0)}
               color="text-red-400"
             />
@@ -131,13 +131,13 @@ export function Dashboard({ precomputed }: Props) {
           <div className="space-y-4">
             <InsightBlock
               title="Systematic RV Overpricing"
-              desc={`${formatPct(rvAccuracy.pct_below_rv || 0)} of laptops sell below their contractual RV. The average lessor loss is ${formatUSD(Math.abs(rvAccuracy.mean_diff || 0))} per unit. With ${(stats.total_records || 0).toLocaleString()} units, this represents significant portfolio risk.`}
+              desc={`${formatPct(rvAccuracy.pct_below_rv || 0)} of laptops sell below their proposed RV. The average lessor loss is ${formatUSD(Math.abs(rvAccuracy.mean_diff || 0))} per unit. With ${(stats.total_records || 0).toLocaleString()} units, this represents significant portfolio risk.`}
               severity="high"
             />
 
             <InsightBlock
               title="Market vs RV Gap"
-              desc={`Average market retention is ${formatPct(marketStats.mean || 0)} while contractual RV averages ${formatPct(rvStats.mean || 0)}. The ${formatPct(Math.abs((rvStats.mean || 0) - (marketStats.mean || 0)))} gap represents the structural mispricing that ML can correct.`}
+              desc={`Average market retention is ${formatPct(marketStats.mean || 0)} while proposed RV averages ${formatPct(rvStats.mean || 0)}. The ${formatPct(Math.abs((rvStats.mean || 0) - (marketStats.mean || 0)))} gap represents the structural mispricing that ML can correct.`}
               severity="medium"
             />
 
@@ -169,7 +169,7 @@ export function Dashboard({ precomputed }: Props) {
         <h3 className="text-lg font-semibold text-white mb-4">Model Performance</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard label="Market Model R2" value="0.712" desc="Predicts actual selling price" />
-          <MetricCard label="RV Model R2" value="0.937" desc="Predicts contractual RV" />
+          <MetricCard label="RV Model R2" value="0.937" desc="Predicts proposed RV" />
           <MetricCard label="Market MAE" value="2.4%" desc="Mean absolute error" />
           <MetricCard label="RV MAE" value="0.12%" desc="Mean absolute error" />
         </div>

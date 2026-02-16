@@ -25,7 +25,7 @@ export function DepreciationChart({ data, purchasePrice }: Props) {
     month: d.month,
     Market: Math.round(d.marketValue),
     'Market Range': [Math.round(d.marketValueLow), Math.round(d.marketValueHigh)] as [number, number],
-    'Contractual RV': Math.round(d.rvValue),
+    'Proposed RV': Math.round(d.rvValue),
     'Market %': Math.round(d.marketRatio * 100),
     'RV %': Math.round(d.rvRatio * 100),
     gap: Math.round(d.marketValue - d.rvValue),
@@ -79,7 +79,7 @@ export function DepreciationChart({ data, purchasePrice }: Props) {
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Area type="monotone" dataKey="Market Range" stroke="none" fill="url(#rangeGrad)" strokeWidth={0} />
             <Area type="monotone" dataKey="Market" stroke="#3b82f6" fill="url(#marketGrad)" strokeWidth={2} />
-            <Area type="monotone" dataKey="Contractual RV" stroke="#10b981" fill="url(#rvGrad)" strokeWidth={2} />
+            <Area type="monotone" dataKey="Proposed RV" stroke="#10b981" fill="url(#rvGrad)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
